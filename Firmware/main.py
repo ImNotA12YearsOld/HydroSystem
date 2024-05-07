@@ -1,12 +1,16 @@
 from machine import I2C, Pin
 from time import sleep, time
+#import utime as time
 from relays import Relays, VALVE_OUT, LAMP_OUT, PUMP_OUT, FEED_OUT, MIX_OUT, TURN_ON, TURN_OFF
 from sensors import Sensors
 from mcp7940 import MCP7940
 from utime import localtime
 from pico_i2c_lcd import I2cLcd
 from wifi import WiFiConfig
-from tago import TagoIO
+from tago2 import TagoIO
+import ntptime
+import utime
+import machine
 
 # Calculo do proximo evento
 def calc_next_time(new_time, last_time, hours, minutes):
@@ -36,7 +40,7 @@ next_time_on = {"hours": 0, "minutes": 0, "valid": False}
 next_time_off = {"hours": 0, "minutes": 0, "valid": False}
 
 # Range do sensor de PH
-PH_SENS_RANGE = {"min": 0, "max": 14}
+PH_SENS_RANGE = {"min": 5, "max": 7}
 
 # Por do sol
 is_sunset = False
@@ -55,15 +59,26 @@ tago = TagoIO("1c7097ad-c7f8-4834-a5e0-6895be0b6d1b") # TOKEN PARA TRANSMITIR PA
 wifi_config = WiFiConfig(SSID, PASSWORD)
 wifi_config.connect()
 
+TIMEZONE_OFFSET = -3
+ntptime.settime()
+
+wifi_config.disconnect()
+
 relays = Relays()
 sensors = Sensors()
+
 i2c = I2C(1, sda=Pin(18), scl=Pin(19), freq=100000)
 I2C_ADDR = i2c.scan()[0]
 lcd = I2cLcd(i2c, I2C_ADDR, 2, 16)
+
 mcp = MCP7940(i2c)
-mcp.time = localtime()
+ano, mes, dia, hora, minuto, segundo, _, _ = utime.localtime(utime.time() + TIMEZONE_OFFSET * 3600)
+mcp.time = ano, mes, dia, hora, minuto, segundo, 0, 0
+
+#mcp.time = localtime()
 mcp.start()
 mcp.battery_backup_enable(True)
+
 first_mcp_time = mcp.time
 next_time_on["hours"] = first_mcp_time[HOURS]
 next_time_on["minutes"] = first_mcp_time[MINUTES]
@@ -234,19 +249,32 @@ while True:
                 "value": sensors.get_ph_data(),
                 "variable": "ph",
             },
-#             {
-#                 "value": {
-#                     "Valve": relays.get_output_state(VALVE_OUT),
-#                     "Lamp": relays.get_output_state(LAMP_OUT),
-#                     "Pump": relays.get_output_state(PUMP_OUT),
-#                     "Feed": relays.get_output_state(FEED_OUT),
-#                     "Mix": relays.get_output_state(MIX_OUT)
-#                     }
-#                 "variable": "relay_status",
-#             },
+            {
+                "value": relays.get_output_state(VALVE_OUT),
+                "variable": "valve_status",
+            },
+            {
+                "value": relays.get_output_state(LAMP_OUT),
+                "variable": "lamp_status",
+            },
+            {
+                "value": relays.get_output_state(PUMP_OUT),
+                "variable": "pump_status",
+            },
+            {
+                "value": relays.get_output_state(FEED_OUT),
+                "variable": "feed_status",
+            },
+            {
+                "value": relays.get_output_state(MIX_OUT),
+                "variable": "mix_status",
+            }
         ]
+        
+        wifi_config.connect()
         success = tago.send_data(data)
-        calc_next_time(next_time_send_data, next_time_send_data, 1, 0)
+        calc_next_time(next_time_send_data, next_time_send_data, 0, 15)
+        wifi_config.disconnect()
     sleep(1)
 
 
