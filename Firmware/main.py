@@ -7,7 +7,7 @@ from mcp7940 import MCP7940
 from utime import localtime
 from pico_i2c_lcd import I2cLcd
 from wifi import WiFiConfig
-from tago2 import TagoIO
+from tago import TagoIO
 import ntptime
 import utime
 import machine
@@ -54,7 +54,16 @@ lcd_showing_data_seconds = 0
 next_time_send_data = {"hours": 0, "minutes": 0, "valid": False}
 SSID = "Crias 2G" # SSID REDE WIFI
 PASSWORD = "RTRR2023" # SENHA REDE WIFI
-tago = TagoIO("1c7097ad-c7f8-4834-a5e0-6895be0b6d1b") # TOKEN PARA TRANSMITIR PARA TAGO
+
+#Configurando MQTT Tago
+TAGO_MQTT_HOST = "mqtt.tago.io"
+TAGO_MQTT_PORT = 1883
+TAGO_MQTT_USERNAME = "HydroSystem"
+TAGO_MQTT_PASSWORD = "1c7097ad-c7f8-4834-a5e0-6895be0b6d1b"
+TAGO_DEVICE_TOKEN = "1c7097ad-c7f8-4834-a5e0-6895be0b6d1b"
+
+tago_id = TagoIO(TAGO_MQTT_HOST, TAGO_MQTT_PORT, TAGO_MQTT_USERNAME, TAGO_MQTT_PASSWORD, TAGO_DEVICE_TOKEN)
+
 
 wifi_config = WiFiConfig(SSID, PASSWORD)
 wifi_config.connect()
@@ -104,7 +113,7 @@ while True:
                 relays.turn_output(PUMP_OUT, TURN_OFF)
                 next_time_on = calc_next_time(next_time_on, next_time_off, 0, 15)
                 next_time_off["valid"] = False
-            
+            agoIO(TAGO_MQTT_HOST, TAGO_MQTT_PORT, TAGO_MQTT_USERNAME, TAGO_MQTT_PASSWORD, TAGO_DEVICE_TOKEN)
     elif time_now[HOURS] >= NIGHTTIME["min"] or time_now[HOURS] <= NIGHTTIME["max"]:
         if next_time_on["valid"]:
             if(time_now[HOURS] is next_time_on["hours"]) and (time_now[MINUTES] is next_time_on["minutes"]):
@@ -120,7 +129,7 @@ while True:
         # Deu ruim...
         relays.turn_output(PUMP_OUT, TURN_OFF)
     
-    # Checando por do sol
+    # Checando por do solagoIO(TAGO_MQTT_HOST, TAGO_MQTT_PORT, TAGO_MQTT_USERNAME, TAGO_MQTT_PASSWORD, TAGO_DEVICE_TOKEN)
     if time_now[HOURS] >= 18 and (time_now[HOURS] <= 21 and time_now[MINUTES] < 30):
         if not is_sunset:
             relays.turn_output(LAMP_OUT, TURN_ON)
@@ -272,7 +281,7 @@ while True:
         ]
         
         wifi_config.connect()
-        success = tago.send_data(data)
+        success = tago_id.send_data(data)
         calc_next_time(next_time_send_data, next_time_send_data, 0, 15)
         wifi_config.disconnect()
     sleep(1)
